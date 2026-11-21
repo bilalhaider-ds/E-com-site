@@ -16,9 +16,11 @@ phases:
   post_build:
     commands:
       - docker push $REG/$ECR_REPO:$TAG
+      - printf '[{"name":"app","imageUri":"%s"}]' $REG/$ECR_REPO:$TAG > imagedefinitions.json
       - printf '{"ImageURI":"%s"}' $REG/$ECR_REPO:$TAG > imageDetail.json
 artifacts:
   files:
+    - imagedefinitions.json
     - imageDetail.json
     - taskdef.json
     - appspec.yaml
