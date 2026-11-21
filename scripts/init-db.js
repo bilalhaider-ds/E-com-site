@@ -17,6 +17,7 @@ async function initDb() {
     database: 'postgres',
     user: dbUser,
     password: dbPassword,
+  ssl: { rejectUnauthorized: false },
   });
 
   try {
@@ -47,6 +48,7 @@ async function initDb() {
     database: dbName,
     user: dbUser,
     password: dbPassword,
+  ssl: { rejectUnauthorized: false },
   });
 
   try {
