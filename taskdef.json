@@ -4,17 +4,18 @@
   "requiresCompatibilities": ["EC2"],
   "cpu": "512",
   "memory": "700",
-  "executionRoleArn": "arn:aws:iam::611182198012:role/ecsTaskExec",
+  "executionRoleArn": "arn:aws:iam::166044977308:role/ecom-ecs-task-exec-role",
   "containerDefinitions": [
     {
       "name": "app",
       "image": "<IMAGE1_NAME>",
       "essential": true,
-      "command": ["sh", "-c", "npm run db:init && node server.js"],
-      "portMappings": [{ "containerPort": 3000, "hostPort": 0, "protocol": "tcp" }],
+      "portMappings": [
+        { "containerPort": 3000, "hostPort": 0, "protocol": "tcp" }
+      ],
       "environment": [
         { "name": "PORT", "value": "3000" },
-        { "name": "DB_HOST", "value": "ecom-db.cjgoswk0amki.ap-south-1.rds.amazonaws.com" },
+        { "name": "DB_HOST", "value": "ecom-db.clweasq46lnb.ap-south-1.rds.amazonaws.com" },
         { "name": "DB_PORT", "value": "5432" },
         { "name": "DB_NAME", "value": "shop" },
         { "name": "DB_USER", "value": "appuser" },
@@ -26,7 +27,7 @@
         "options": {
           "awslogs-group": "/ecs/e-com-task",
           "awslogs-region": "ap-south-1",
-          "awslogs-stream-prefix": "app"
+          "awslogs-stream-prefix": "ecs"
         }
       }
     }
