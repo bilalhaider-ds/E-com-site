@@ -1,8 +1,15 @@
 Assignment 7 Submission
 Name: Bilal Haider
 Email: bilalhaider4911@gmail.com
-Repo: https://github.com/bilalhaider-ds/E-com-site
 Region: ap-south-1 (Mumbai)
+
+Links:
+- GitHub Repo: https://github.com/bilalhaider-ds/E-com-site
+- Live App: http://$\{ALB_DNS\}
+- Health Check: http://$\{ALB_DNS\}/health
+- Buildspec: https://github.com/bilalhaider-ds/E-com-site/blob/main/buildspec.yml
+- Dockerfile: https://github.com/bilalhaider-ds/E-com-site/blob/main/Dockerfile
+- Handover Notes: https://github.com/bilalhaider-ds/E-com-site/blob/main/handover.txt
 
 What I did:
 
@@ -23,8 +30,8 @@ I added 6 CloudWatch alarms linked to that SNS topic (ALB 5XX errors, ALB latenc
 Part 4 (EventBridge Alerts)
 I created an EventBridge rule (ecom-config-noncompliant) that watches for AWS Config rules going NON_COMPLIANT and sends them to the ecom-alerts SNS topic. When I ran the port 22 test in Part 2, the alert email showed up in my Gmail.
 
-Part 5 (Docs and Cleanup)
-Added handover.txt and submission.txt to the repo. After saving all the screenshots, I deleted the AWS resources (ECS, EC2, RDS, ALB, VPC, NAT, S3, ECR, pipeline, config, alarms, dashboard, SNS, EventBridge, and IAM roles) so I don't waste Free Tier credits.
+Part 5 (Docs and Status)
+Added handover.txt and submission.txt to the repo. All resources are currently live for grading and will be deleted right after grading is done to save Free Tier credits.
 
 Problems I ran into and how I fixed them:
 1. The Trivy download URL in buildspec.yml kept failing during the install phase, so I switched to their official install.sh script.
