@@ -1,7 +1,8 @@
-FROM public.ecr.aws/docker/library/node:20.18.1-bookworm-slim
+FROM public.ecr.aws/docker/library/node:22-alpine
+RUN apk upgrade --no-cache
 WORKDIR /app
 COPY package*.json ./
-RUN npm install -g npm@10.9.2 && npm ci --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /opt/yarn*
 COPY . .
 USER node
 EXPOSE 3000
