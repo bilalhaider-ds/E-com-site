@@ -1,6 +1,8 @@
-node_modules
-.env
 .git
+node_modules
+ecom-terraform
+Dockerfile
+buildspec.yml
+taskdef.json
+appspec.yaml
 *.md
-*.svg
-*.txt
