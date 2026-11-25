@@ -1,43 +1,103 @@
-E-Com Site Handover Notes
+HANDOVER DOCUMENT
+Production Environment for Node.js E-commerce Application
 
-Project info:
-Repo: https://github.com/bilalhaider-ds/E-com-site
-Region: ap-south-1 (Mumbai)
-Stack: Node.js (Express), PostgreSQL on RDS, Docker, ECS on EC2, ALB
+Project: Production environment for Node.js e-commerce application
+Team: Individual (DevOps Mentorship Program)
+Date: 2026-11-26
+Prepared by: Bilal Haider
+Project Repository: https://github.com/bilalhaider-ds/E-com-site
 
-Main AWS resources:
-- VPC: vpc-0b28f0514fb97315e (public and private subnets)
-- Load Balancer: ecom-alb (http://ecom-alb-713077384.ap-south-1.elb.amazonaws.com)
-- ALB Security Group: sg-0d4de6cff00ffed6d
-- Default Security Group: sg-0b35b3ec06f465f52 (inbound and outbound rules cleared)
-- ECS: ecom-cluster running ecom-service on t3.micro EC2
-- Database: ecom-db (PostgreSQL in private subnets, encrypted storage, 1-day backups)
-- ECR: e-com-app
-- S3 bucket: bilal-pipeline-artifacts-166044977308 (pipeline artifacts and AWS Config logs)
-- SNS topic: ecom-alerts (email: bilalhaider4911@gmail.com)
+1. OVERVIEW
+- Application: Node.js, Express, PostgreSQL
+- Main region: Mumbai (ap-south-1)
+- Disaster recovery region: Singapore (ap-southeast-1) - not deployed in this single-region Free Tier setup
+- Environments: Mumbai (ap-south-1) single-region environment
+- Access: HTTP only, using the ALB DNS name (http://ecom-alb-713077384.ap-south-1.elb.amazonaws.com); no custom domain
 
-CI/CD pipeline:
-CodePipeline (ecom-pipeline) pulls from GitHub main using CodeStar connection (ecom-github-conn).
-CodeBuild (ecom-build) runs buildspec.yml with:
-- terraform fmt -check and terraform validate on ecom-terraform/
-- checkov on ecom-terraform/ and Dockerfile
-- hadolint on Dockerfile
-- node --check server.js and npm audit --audit-level=high
-- docker build (node:22-alpine, non-root node user, .dockerignore skips ecom-terraform)
-- trivy image scan (fails on fixable HIGH/CRITICAL issues)
+2. ARCHITECTURE
+- Architecture diagram: Not attached in repo (single-region VPC -> ALB -> ECS on EC2 -> Private RDS)
+- VPC: vpc-0b28f0514fb97315e (CIDR: 10.0.0.0/16)
+- Subnets: 4 subnets configured across 2 Availability Zones (public and private)
+- NAT gateways: 0 active in VPC
+- VPC peering: Not configured (single-region Free Tier scope)
 
-After the image pushes to ECR, the Deploy stage updates ecom-service using imagedefinitions.json (standard ECS rolling deploy, since CodeDeploy Blue/Green threw SubscriptionRequiredException on the Free Tier account).
+3. COMPONENTS
+- Load balancer: ecom-alb; DNS name: ecom-alb-713077384.ap-south-1.elb.amazonaws.com; listeners: ports 80 and 8080
+- Target groups: Blue: bilal-blue; Green: bilal-green
+- ECS: Cluster: ecom-cluster; service: ecom-service; task definition: e-com-task:11
+- Auto scaling: ECS service running desired count 1 on t3.micro EC2 (Free Tier sizing)
+- Container registry: e-com-app (Amazon ECR, ap-south-1)
+- Database: ecom-db; engine/version: postgres 18.3; instance class: db.t3.micro; Multi-AZ: No
+- Backups: Retention: 1 day(s); copy to Singapore: No
+- File uploads / Artifacts: S3 bucket bilal-pipeline-artifacts-166044977308 (CodePipeline artifacts and AWS Config logs)
 
-Monitoring and alerts:
-- VPC Flow Logs on vpc-0b28f0514fb97315e go to /aws/vpc/ecom-flow-logs
-- Log retention is 1 day on /aws/vpc/ecom-flow-logs, /ecs/e-com-task, and /aws/codebuild/ecom-build
-- Dashboard: ecom-dashboard (ALB requests/5XX/latency/healthy hosts, ECS CPU/memory, RDS CPU/connections)
-- 6 CloudWatch alarms tied to ecom-alerts: ecom-alb-5xx-high, ecom-alb-latency-high, ecom-alb-unhealthy-hosts, ecom-ecs-cpu-high, ecom-ecs-mem-high, ecom-rds-cpu-high
-- AWS Config runs 4 rules: restricted-ssh, vpc-default-security-group-closed, rds-storage-encrypted, rds-instance-public-access-check
-- EventBridge rule (ecom-config-noncompliant) forwards NON_COMPLIANT Config events to ecom-alerts
+4. SECURITY
+- Security groups: ecom-alb-sg (sg-0d4de6cff00ffed6d), default (sg-0b35b3ec06f465f52), ecom-ecs-sg (sg-001db2e4302ea182a), ecom-rds-sg (sg-0d99863f0caee1623) (ALB allows HTTP 80/8080; ECS accepts traffic from ALB; RDS port 5432 restricted to ECS; default SG sg-0b35b3ec06f465f52 inbound/outbound rules removed)
+- Network ACLs: acl-0d4c636022df292bc
+- AWS WAF: Not enabled (Free Tier cost restriction)
+- IAM roles:
+  - ecom-codebuild-role: allows CodeBuild to push to ECR, write CloudWatch logs, and access S3 artifacts
+  - ecom-codepipeline-role: orchestrates GitHub CodeStar connection, CodeBuild, and ECS deployment
+  - ecom-ecs-instance-role: allows ECS EC2 host to register with ecom-cluster and pull ECR images
+  - ecom-ecs-exec-role: allows ECS tasks to pull ECR images and write logs to CloudWatch
+  - ecom-flowlogs-role: allows VPC Flow Logs delivery to CloudWatch Logs
+  - AWSServiceRoleForConfig: service-linked role used by AWS Config recorder
+- SSH access: Port 22 is closed on all security groups (verified by AWS Config rule restricted-ssh). Use AWS Systems Manager Session Manager if host access is needed.
 
-Quick checks if something breaks:
-- App health: curl http://ecom-alb-713077384.ap-south-1.elb.amazonaws.com/health
-- App logs: CloudWatch -> /ecs/e-com-task
-- Build failures: CodeBuild -> ecom-build -> Build history
-- Config alert email: check the resource ID in the SNS email, undo the manual SG or RDS change, and re-run evaluation in AWS Config.
+5. MONITORING
+- CloudWatch log groups: /ecs/e-com-task, /aws/codebuild/ecom-build, /aws/vpc/ecom-flow-logs; retention: 1 day (adjusted from 7 days to stay within Free Tier)
+- CloudTrail: AWS default 90-day Event History enabled (no separate paid trail created)
+- VPC Flow Logs: /aws/vpc/ecom-flow-logs (capturing ALL traffic on vpc-0b28f0514fb97315e)
+- AWS Config: Recorder enabled (default); rules: restricted-ssh, vpc-default-security-group-closed, rds-storage-encrypted, rds-instance-public-access-check
+- Alarms: ecom-alb-5xx-high, ecom-alb-latency-high, ecom-alb-unhealthy-hosts, ecom-ecs-cpu-high, ecom-ecs-mem-high, ecom-rds-cpu-high
+- Alert notifications: SNS topic: ecom-alerts; email: bilalhaider4911@gmail.com (confirmed)
+- EventBridge: ecom-config-noncompliant (routes NON_COMPLIANT AWS Config changes to ecom-alerts)
+- Dashboard: ecom-dashboard
+
+6. CI/CD
+- Pipeline: ecom-pipeline
+- Source: GitHub (bilalhaider-ds/E-com-site via CodeStar connection ecom-github-conn); branch: main
+- Build and security checks: Terraform fmt/validate, Checkov, Hadolint, node syntax check, npm audit (--audit-level=high), and Trivy image scan (--severity HIGH,CRITICAL --ignore-unfixed --exit-code 1)
+- Deployment: ECS rolling deployment using imagedefinitions.json (CodeDeploy Blue/Green returned SubscriptionRequiredException on the Free Tier account)
+- Production approval: Manual approval required before deployment: No
+
+7. DISASTER RECOVERY
+- Restore procedure: Refer to runbook RB-05 (RDS snapshot restore) and RB-06 (region failover outline).
+- Last failover test: Not executed (single-region Free Tier setup; Singapore DR environment not provisioned)
+- Test result: N/A
+
+8. RUNBOOKS
+- RB-01 - Deploy a new application version: Push changes to main on GitHub. CodePipeline (ecom-pipeline) automatically runs Source, CodeBuild security scans, ECR push, and ECS rolling deploy. Verify http://ecom-alb-713077384.ap-south-1.elb.amazonaws.com/health returns status ok.
+- RB-02 - Roll back a deployment: In ECS -> ecom-cluster -> ecom-service -> Update service, select the previous working e-com-task revision and force a new deployment, or revert the commit on GitHub main.
+- RB-03 - Scale the application service: Update desired count on ecom-service in ECS (ensure enough EC2 capacity in ecom-cluster before increasing beyond 1 task on t3.micro).
+- RB-04 - Troubleshoot application downtime or HTTP 503 from ALB: Check target health in bilal-blue target group, verify ECS running task count in ecom-service, inspect /ecs/e-com-task logs in CloudWatch, and test http://ecom-alb-713077384.ap-south-1.elb.amazonaws.com/health.
+- RB-05 - Restore the database from a snapshot: Open RDS -> Automated backups or Snapshots -> select ecom-db backup -> Restore to new DB instance in the private DB subnet group, then update DB host in taskdef.json and redeploy.
+- RB-06 - Fail over to Singapore region: Provision VPC/RDS/ECS stack in ap-southeast-1 using Terraform (ecom-terraform/), restore latest RDS snapshot copied to ap-southeast-1, push image to Singapore ECR, and switch traffic to the new ALB DNS.
+- RB-07 - Handle an AWS Config or security alert: Check the resource ID and rule name in the SNS email triggered by ecom-config-noncompliant, revert the unauthorized change (for example remove port 22 from the security group), and click Re-evaluate in AWS Config until COMPLIANT.
+
+9. KNOWN ISSUES
+- CodeDeploy Blue/Green unavailable on Free Tier: CreateDeploymentGroup failed with SubscriptionRequiredException. Workaround: switched CodePipeline Deploy stage to standard ECS rolling deployment with imagedefinitions.json.
+- Single-region setup and no WAF: Singapore DR, VPC peering, Multi-AZ RDS, and AWS WAF were skipped to avoid paid charges outside AWS Free Tier.
+- HTTP only: No custom domain or ACM TLS certificate attached; traffic runs over HTTP on the ALB DNS.
+- 1-day log retention: Log retention is set to 1 day instead of 7 days to keep CloudWatch storage within Free Tier limits.
+
+10. HANDOVER CHECKLIST
+[ ] Architecture diagram is attached.
+[x] All AWS resource names and IDs are documented.
+[x] All runbooks are written (RB-01 to RB-07 documented; DR failover not executed on Free Tier).
+[x] Alert notification email is confirmed (bilalhaider4911@gmail.com).
+[x] CI/CD pipeline has completed successfully (Source, Build, Deploy all green).
+[ ] Disaster recovery failover test is completed (skipped - single-region Free Tier scope).
+[ ] Temporary test and lab resources are deleted (kept live for grading; cleanup script ready to run right after grading).
+[x] Access permissions and IAM roles are reviewed.
+
+11. CONTACTS
+- Student / Owner: Bilal Haider (bilalhaider4911@gmail.com)
+- Mentor: Meysam Raza
+
+HANDOVER ACCEPTANCE
+The receiving team confirms that the project information, access details, architecture, deployment process, monitoring setup, and operational runbooks have been reviewed.
+
+Handed over by: Bilal Haider
+Received by: Meysam Raza (Pending review)
+Acceptance date: 2026-11-26
