@@ -1,8 +1,9 @@
 version: 0.2
 
-variables:
-  AWS_REGION: ap-south-1
-  ECR_REPO: e-com-app
+env:
+  variables:
+    AWS_REGION: ap-south-1
+    ECR_REPO: e-com-app
 
 phases:
   install:
