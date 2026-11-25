@@ -5,8 +5,8 @@ Region: ap-south-1 (Mumbai)
 
 Links:
 - GitHub Repo: https://github.com/bilalhaider-ds/E-com-site
-- Live App: http://$\{ALB_DNS\}
-- Health Check: http://$\{ALB_DNS\}/health
+- Live App: http://ecom-alb-713077384.ap-south-1.elb.amazonaws.com
+- Health Check: http://ecom-alb-713077384.ap-south-1.elb.amazonaws.com/health
 - Buildspec: https://github.com/bilalhaider-ds/E-com-site/blob/main/buildspec.yml
 - Dockerfile: https://github.com/bilalhaider-ds/E-com-site/blob/main/Dockerfile
 - Handover Notes: https://github.com/bilalhaider-ds/E-com-site/blob/main/handover.txt

@@ -37,7 +37,7 @@ Monitoring and alerts:
 - EventBridge rule (ecom-config-noncompliant) forwards NON_COMPLIANT Config events to ecom-alerts
 
 Quick checks if something breaks:
-- App health: curl http://$\{ALB_DNS\}/health
+- App health: curl http://ecom-alb-713077384.ap-south-1.elb.amazonaws.com/health
 - App logs: CloudWatch -> /ecs/e-com-task
 - Build failures: CodeBuild -> ecom-build -> Build history
 - Config alert email: check the resource ID in the SNS email, undo the manual SG or RDS change, and re-run evaluation in AWS Config.
