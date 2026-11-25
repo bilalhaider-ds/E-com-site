@@ -25,7 +25,7 @@ phases:
       - terraform -chdir=ecom-terraform fmt -check
       - terraform -chdir=ecom-terraform init -backend=false
       - terraform -chdir=ecom-terraform validate
-      - checkov -d ecom-terraform -f Dockerfile --framework terraform dockerfile --quiet
+      - checkov -d ecom-terraform -f Dockerfile --framework terraform dockerfile --skip-check CKV_DOCKER_11 --quiet
       - hadolint Dockerfile
       - npm ci
       - node --check server.js

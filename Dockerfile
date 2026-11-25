@@ -1,4 +1,5 @@
 FROM public.ecr.aws/docker/library/node:20.18.1-bookworm-slim
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package*.json ./
 RUN npm install -g npm@10.9.2 && npm ci --omit=dev && npm cache clean --force
