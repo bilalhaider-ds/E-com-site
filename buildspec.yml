@@ -1,23 +1,53 @@
 version: 0.2
-env:
-  variables:
-    AWS_REGION: ap-south-1
-    ECR_REPO: e-com-app
+
+variables:
+  AWS_REGION: ap-south-1
+  ECR_REPO: e-com-app
+
 phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+      python: 3.11
+    commands:
+      - echo "=== Installing Terraform, Checkov, Hadolint, and Trivy ==="
+      - wget -q https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip -O /tmp/terraform.zip
+      - unzip -qo /tmp/terraform.zip -d /usr/local/bin && rm -f /tmp/terraform.zip
+      - pip3 install --quiet checkov
+      - wget -qO /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
+      - chmod +x /usr/local/bin/hadolint
+      - wget -qO- https://github.com/aquasecurity/trivy/releases/download/v0.58.1/trivy_0.58.1_Linux-64bit.tar.gz | tar -xz -C /usr/local/bin trivy
+      - terraform version && checkov --version && hadolint --version && trivy --version
+
   pre_build:
     commands:
+      - echo "=== Running Terraform, Checkov, Hadolint & Node Security Checks ==="
+      - terraform -chdir=ecom-terraform fmt -check
+      - terraform -chdir=ecom-terraform init -backend=false
+      - terraform -chdir=ecom-terraform validate
+      - checkov -d ecom-terraform -f Dockerfile --framework terraform dockerfile --quiet
+      - hadolint Dockerfile
+      - npm ci
+      - node --check server.js
+      - npm audit --audit-level=high
       - ACC=$(aws sts get-caller-identity --query Account --output text)
       - REG=$ACC.dkr.ecr.$AWS_REGION.amazonaws.com
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REG
       - TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c1-7)
+
   build:
     commands:
+      - echo "=== Building Docker Image & Running Trivy Security Scan ==="
       - docker build -t $REG/$ECR_REPO:$TAG .
+      - trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 $REG/$ECR_REPO:$TAG
+
   post_build:
     commands:
+      - echo "=== Pushing Image to ECR & Generating ECS Artifacts ==="
       - docker push $REG/$ECR_REPO:$TAG
       - printf '[{"name":"app","imageUri":"%s"}]' $REG/$ECR_REPO:$TAG > imagedefinitions.json
       - printf '{"ImageURI":"%s"}' $REG/$ECR_REPO:$TAG > imageDetail.json
+
 artifacts:
   files:
     - imagedefinitions.json
