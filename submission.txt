@@ -1,0 +1,34 @@
+Assignment 7 Submission
+Name: Bilal Haider
+Email: bilalhaider4911@gmail.com
+Repo: https://github.com/bilalhaider-ds/E-com-site
+Region: ap-south-1 (Mumbai)
+
+What I did:
+
+Part 1 (CI/CD and Security Scans)
+I updated the Dockerfile to use node:22-alpine with a non-root node user and a healthcheck, and added a .dockerignore file so extra local and terraform files don't end up inside the container image.
+In CodeBuild (ecom-build), I added checks for terraform fmt/validate, checkov, hadolint, npm audit, and trivy before pushing the image to ECR.
+Then I linked my GitHub repo with a CodeStar connection (ecom-github-conn) and set up CodePipeline (ecom-pipeline). Source, Build, and Deploy all went green, and hitting /health on the ALB returned {"status":"ok","database":"connected"}.
+
+Part 2 (AWS Config and Drift Test)
+I turned on AWS Config using my S3 bucket (bilal-pipeline-artifacts-166044977308) and added the 4 managed rules: restricted-ssh, vpc-default-security-group-closed, rds-storage-encrypted, and rds-instance-public-access-check.
+To test it, I opened port 22 (0.0.0.0/0) on the ALB security group (sg-0d4de6cff00ffed6d). AWS Config flagged restricted-ssh as NON_COMPLIANT. After taking screenshots, I removed the port 22 rule and checked again until all 4 rules showed COMPLIANT.
+
+Part 3 (Logs, Alarms, Dashboard)
+I turned on VPC Flow Logs for vpc-0b28f0514fb97315e sending logs to /aws/vpc/ecom-flow-logs. I set retention to 1 day on all log groups (/aws/vpc/ecom-flow-logs, /ecs/e-com-task, /aws/codebuild/ecom-build) to stay inside Free Tier limits.
+I created an SNS topic (ecom-alerts) and confirmed the email subscription on bilalhaider4911@gmail.com.
+I added 6 CloudWatch alarms linked to that SNS topic (ALB 5XX errors, ALB latency, unhealthy hosts, ECS CPU, ECS memory, and RDS CPU) and put together a dashboard called ecom-dashboard.
+
+Part 4 (EventBridge Alerts)
+I created an EventBridge rule (ecom-config-noncompliant) that watches for AWS Config rules going NON_COMPLIANT and sends them to the ecom-alerts SNS topic. When I ran the port 22 test in Part 2, the alert email showed up in my Gmail.
+
+Part 5 (Docs and Cleanup)
+Added handover.txt and submission.txt to the repo. After saving all the screenshots, I deleted the AWS resources (ECS, EC2, RDS, ALB, VPC, NAT, S3, ECR, pipeline, config, alarms, dashboard, SNS, EventBridge, and IAM roles) so I don't waste Free Tier credits.
+
+Problems I ran into and how I fixed them:
+1. The Trivy download URL in buildspec.yml kept failing during the install phase, so I switched to their official install.sh script.
+2. My buildspec variables came up empty in the build phase because I missed the env: key above variables:. Adding env: fixed it.
+3. Trivy kept failing on Go CVEs even though this is a Node app. Turned out terraform init in pre_build downloaded the AWS provider binary inside ecom-terraform/.terraform, and COPY . . packed it into the Docker image. I added .dockerignore to skip ecom-terraform and switched the base image from debian 12.9 to node:22-alpine, which cleared the scan.
+4. CodeDeploy threw SubscriptionRequiredException on my Free Tier account when creating the deployment group, so I used standard ECS rolling deploy with imagedefinitions.json in the pipeline Deploy stage instead.
+5. SNS rejected "SNS:*" in the topic policy, so I listed out the specific SNS actions instead.

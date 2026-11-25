@@ -1,0 +1,43 @@
+E-Com Site Handover Notes
+
+Project info:
+Repo: https://github.com/bilalhaider-ds/E-com-site
+Region: ap-south-1 (Mumbai)
+Stack: Node.js (Express), PostgreSQL on RDS, Docker, ECS on EC2, ALB
+
+Main AWS resources:
+- VPC: vpc-0b28f0514fb97315e (public and private subnets)
+- Load Balancer: ecom-alb (http://ecom-alb-713077384.ap-south-1.elb.amazonaws.com)
+- ALB Security Group: sg-0d4de6cff00ffed6d
+- Default Security Group: sg-0b35b3ec06f465f52 (inbound and outbound rules cleared)
+- ECS: ecom-cluster running ecom-service on t3.micro EC2
+- Database: ecom-db (PostgreSQL in private subnets, encrypted storage, 1-day backups)
+- ECR: e-com-app
+- S3 bucket: bilal-pipeline-artifacts-166044977308 (pipeline artifacts and AWS Config logs)
+- SNS topic: ecom-alerts (email: bilalhaider4911@gmail.com)
+
+CI/CD pipeline:
+CodePipeline (ecom-pipeline) pulls from GitHub main using CodeStar connection (ecom-github-conn).
+CodeBuild (ecom-build) runs buildspec.yml with:
+- terraform fmt -check and terraform validate on ecom-terraform/
+- checkov on ecom-terraform/ and Dockerfile
+- hadolint on Dockerfile
+- node --check server.js and npm audit --audit-level=high
+- docker build (node:22-alpine, non-root node user, .dockerignore skips ecom-terraform)
+- trivy image scan (fails on fixable HIGH/CRITICAL issues)
+
+After the image pushes to ECR, the Deploy stage updates ecom-service using imagedefinitions.json (standard ECS rolling deploy, since CodeDeploy Blue/Green threw SubscriptionRequiredException on the Free Tier account).
+
+Monitoring and alerts:
+- VPC Flow Logs on vpc-0b28f0514fb97315e go to /aws/vpc/ecom-flow-logs
+- Log retention is 1 day on /aws/vpc/ecom-flow-logs, /ecs/e-com-task, and /aws/codebuild/ecom-build
+- Dashboard: ecom-dashboard (ALB requests/5XX/latency/healthy hosts, ECS CPU/memory, RDS CPU/connections)
+- 6 CloudWatch alarms tied to ecom-alerts: ecom-alb-5xx-high, ecom-alb-latency-high, ecom-alb-unhealthy-hosts, ecom-ecs-cpu-high, ecom-ecs-mem-high, ecom-rds-cpu-high
+- AWS Config runs 4 rules: restricted-ssh, vpc-default-security-group-closed, rds-storage-encrypted, rds-instance-public-access-check
+- EventBridge rule (ecom-config-noncompliant) forwards NON_COMPLIANT Config events to ecom-alerts
+
+Quick checks if something breaks:
+- App health: curl http://$\{ALB_DNS\}/health
+- App logs: CloudWatch -> /ecs/e-com-task
+- Build failures: CodeBuild -> ecom-build -> Build history
+- Config alert email: check the resource ID in the SNS email, undo the manual SG or RDS change, and re-run evaluation in AWS Config.
